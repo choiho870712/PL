@@ -49,6 +49,18 @@ terminal (token) :
                    // Symbols are case-sensitive 
                    // (i.e., uppercase and lowercase are different);
 
+<left-paren> ::= (
+<right-paren> ::= )
+<int> ::= [sign] {digit}
+<float> ::= [sign] {digit} . digit {digit} | [sign] digit {digit} . {digit}
+<string> ::= "{char}"
+<dot> ::= .
+<nil> ::= nil | #f
+<T> ::= [#] t 
+<quote> ::= '
+<symbol> ::= char{char}
+
+
 Note :
 
   With the exception of strings, token are separated by the following "separators" :
