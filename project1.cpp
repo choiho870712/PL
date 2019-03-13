@@ -68,6 +68,8 @@ class Scanner {
     int GetColumn() ;
     CharPtr GetStr() ;
   private :
+    bool flag_got_first_token ;
+    bool flag_got_token ;
     int current_line ;
     int current_column ;
     int latest_token_line ;
@@ -169,6 +171,8 @@ void Token::SetColumn( int input_column ) {
 
 // class Scanner ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Scanner::Scanner() {
+  flag_got_first_token = false ;
+  flag_got_token = false ;
   current_line = 1 ;
   current_column = 0 ;
   latest_token_line = -1 ;
@@ -223,7 +227,7 @@ CharPtr Scanner::GetStr() {
 } // Scanner::GetStr()
 
 CharPtr Scanner::ReadNewToken() {
-  bool flag_got_token = false ;
+  flag_got_token = false ;
   CharPtr str = (CharPtr) malloc( sizeof( char ) * MAX_STRING_LENGTH ) ;
   CharPtr ap = NULL ; // access pointer, point to the place where next char need to access
   ap = str ; // point to the first place of token
@@ -300,6 +304,9 @@ CharPtr Scanner::ReadNewToken() {
     *++ap = GetNewChar() ;
   } // while
 
+  if ( flag_got_token == true )
+    flag_got_first_token = true ;
+
   // return success
   *ap = '\0' ;
   return str ; 
@@ -355,6 +362,10 @@ char Scanner::GetNewChar() {
     current_column = 0 ;
   } // if
   else current_column++ ;
+
+  if ( flag_got_first_token == false ) 
+    current_line = 1 ;
+
   return ch ;
 } // Scanner::GetNewChar()
 
