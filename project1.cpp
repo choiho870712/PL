@@ -60,6 +60,7 @@ typedef Token *TokenPtr ;
 
 class ParsingTree {
   public :
+    ParsingTree() ;
     bool SetLeftSubTree( ParsingTree *tree ) ;
     bool SetRightSubTree( ParsingTree *tree ) ;
     bool SetCurrentToken( TokenPtr token ) ;
@@ -187,6 +188,43 @@ void Token::SetLine( int input_line ) {
 void Token::SetColumn( int input_column ) {
   column = input_column ;
 } // Token::SetColumn
+
+// class PparsingTree ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+ParsingTree::ParsingTree() {
+  currentToken = NULL ;
+  leftSubTree = NULL ;
+  rightSubTree = NULL ;
+} // ParsingTree::ParsingTree()
+
+bool ParsingTree::SetLeftSubTree( ParsingTree *tree ) {
+  if ( tree == NULL ) return false ;
+  leftSubTree = tree ;
+  return true ;
+} // ParsingTree::SetLeftSubTree()
+
+bool ParsingTree::SetRightSubTree( ParsingTree *tree ) {
+  if ( tree == NULL ) return false ;
+  rightSubTree = tree ;
+  return true ;
+} // ParsingTree::SetRightSubTree()
+
+bool ParsingTree::SetCurrentToken( TokenPtr token ) {
+  if ( token == NULL ) return false ;
+  currentToken = token ;
+  return true ;
+} // ParsingTree::SetCurrentToken()
+
+ParsingTree* ParsingTree::GetLeftSubTree() {
+  return leftSubTree ;
+} // ParsingTree::GetLeftSubTree()
+
+ParsingTree* ParsingTree::GetRightSubTree() {
+  return rightSubTree ;
+} // ParsingTree::GetRightSubTree()
+
+TokenPtr ParsingTree::GetCurrentToken() {
+  return currentToken ;
+} // ParsingTree::GetCurrentToken()
 
 // class Scanner ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Scanner::Scanner() {
@@ -388,6 +426,10 @@ char Scanner::GetNewChar() {
   return ch ;
 } // Scanner::GetNewChar()
 
+TokenPtr Scanner::GetCurrentToken() {
+  return current_token ;  
+} // Scanner::GetCurrentToken()
+
 // class Parser /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Parser::Parser() {
   paren_balance = 0 ;
@@ -395,8 +437,7 @@ Parser::Parser() {
 } // Parser::Parser()
 
 bool Parser::ReadSExp() {
-  parsingTree = new ParsingTree ;
-  if ( SExp() == NULL ) {
+  if ( ( parsingTree = SExp() ) == NULL ) {
     ReadGarbage() ;
     return false ;
   } // if
