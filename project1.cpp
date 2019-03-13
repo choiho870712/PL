@@ -58,6 +58,21 @@ class Token {
 } ; // class Token
 typedef Token *TokenPtr ;
 
+class ParsingTree {
+  public :
+    bool SetLeftSubTree( ParsingTree *tree ) ;
+    bool SetRightSubTree( ParsingTree *tree ) ;
+    bool SetCurrentToken( TokenPtr token ) ;
+    ParsingTree *GetLeftSubTree() ;
+    ParsingTree *GetRightSubTree() ;
+    TokenPtr GetCurrentToken() ;
+  private :
+    TokenPtr currentToken ;
+    ParsingTree *leftSubTree ;
+    ParsingTree *rightSubTree ;
+} ; // class ParsingTree
+typedef ParsingTree *ParsingTreePtr ;
+
 class Scanner {
   public :
     Scanner() ;
@@ -67,6 +82,7 @@ class Scanner {
     int GetLine() ;
     int GetColumn() ;
     CharPtr GetStr() ;
+    TokenPtr GetCurrentToken() ;
   private :
     bool flag_got_first_token ;
     bool flag_got_token ;
@@ -89,9 +105,12 @@ class Parser {
     bool ReadSExp() ; // read s-exp, if quit or end of file reture false
     bool PrintSExp() ; // print s-exp and it's structure, if no s-exp then return false
   private :
+    int paren_balance ;
     Scanner scanner ;
-    bool SExp() ; // <S-exp> ::= <ATOM> | LEFT-PAREN <S-exp> { <S-exp> } [ DOT <S-exp> ] RIGHT-PAREN | QUOTE <S-exp>
-    bool Atom() ; // <ATOM>  ::= SYMBOL | INT | FLOAT | STRING | NIL | T | LEFT-PAREN RIGHT-PAREN
+    ParsingTreePtr parsingTree ;
+    ParsingTreePtr SExp() ; // <S-exp> ::= <ATOM> | LEFT-PAREN <S-exp> { <S-exp> } [ DOT <S-exp> ] RIGHT-PAREN | QUOTE <S-exp>
+    TokenPtr Atom() ; // <ATOM>  ::= SYMBOL | INT | FLOAT | STRING | NIL | T | LEFT-PAREN RIGHT-PAREN
+    void ReadGarbage() ;
 } ; // class Parser
 
 // class Token //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -371,63 +390,97 @@ char Scanner::GetNewChar() {
 
 // class Parser /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Parser::Parser() {
+  paren_balance = 0 ;
+  parsingTree = NULL ;
 } // Parser::Parser()
 
 bool Parser::ReadSExp() {
-  return SExp() ; // start recursive decent
+  parsingTree = new ParsingTree ;
+  if ( SExp() == NULL ) {
+    ReadGarbage() ;
+    return false ;
+  } // if
+  else return true ;
 } // Parser::ReadSExp()
 
-bool Parser::SExp() {
+ParsingTreePtr Parser::SExp() {
   // <S-exp> ::= <ATOM> | LEFT-PAREN <S-exp> { <S-exp> } [ DOT <S-exp> ] RIGHT-PAREN | QUOTE <S-exp>
-  if ( scanner.AdvanceToNextToken() == false ) return false ; // advance to next token
+  ParsingTreePtr headPtr, currentPtr, accessPtr ; // creat sexp tree
+  headPtr = new ParsingTree ;
+  currentPtr = headPtr ;
+  accessPtr = NULL ;
 
-  if ( scanner.GetType() == TYPE_LEFT_PAREN ) {
-    do { // do <S-exp> { <S-exp> }, stop with DOT and QUOTE
-      if ( SExp() == false ) return false ; // try to get SExp
-    } while ( !( scanner.PeakNextTokenType() == TYPE_DOT || scanner.PeakNextTokenType() == TYPE_RIGHT_PAREN ) ) ; // stop with DOT and QUOTE
+  // do syntax
+  if ( scanner.PeakNextTokenType() == TYPE_LEFT_PAREN ) { // LEFT-PAREN <S-exp> { <S-exp> } [ DOT <S-exp> ] RIGHT-PAREN
+    if ( scanner.AdvanceToNextToken() == false ) return NULL ; // get LEFT-PAREN
+    paren_balance++ ; // for error detecting and throwing the garbage
 
-    if ( scanner.AdvanceToNextToken() == false ) return false ; // advance to next token
-    
-    if ( scanner.GetType() == TYPE_DOT ) { // do [ DOT <S-exp> ], 
-      if ( SExp() == false ) return false ; // try to get SExp
-      if ( scanner.AdvanceToNextToken() == false ) return false ; // advance to next token
+    if ( headPtr->SetLeftSubTree( SExp() ) == false ) return NULL ; // get <S-exp> and put it to left tree
+
+    while ( !( scanner.PeakNextTokenType() == TYPE_DOT || scanner.PeakNextTokenType() == TYPE_RIGHT_PAREN ) ) { // stop with DOT and QUOTE
+      accessPtr = new ParsingTree ; // creat new sub tree 
+      currentPtr->SetRightSubTree( accessPtr ) ; // add this tree to right tree
+      currentPtr = currentPtr->GetRightSubTree() ; // jump to that tree
+      if ( currentPtr->SetLeftSubTree( SExp() ) == false ) return NULL ; // get <S-exp> and put it to left tree
+    } // while
+
+    if ( scanner.PeakNextTokenType() == TYPE_DOT ) { // [ DOT <S-exp> ], 
+      if ( scanner.AdvanceToNextToken() == false ) return NULL ; // get DOT
+      if ( currentPtr->SetRightSubTree( SExp() ) == false ) return NULL ; // get <S-exp> and put it to right tree
     } // if
 
-    if ( scanner.GetType() == TYPE_RIGHT_PAREN ) return true ;
-    else {
+    if ( scanner.PeakNextTokenType() == TYPE_RIGHT_PAREN ) { // RIGHT-PAREN 
+      if ( scanner.AdvanceToNextToken() == false ) return NULL ; // get RIGHT-PAREN 
+      paren_balance-- ; // for error detecting and throwing the garbage
+      return headPtr ; // success, return full tree
+    } // if
+    else { // no RIGHT-PAREN 
       printf( "\nERROR (unexpected token) : ')' expected when token at Line %d Column %d is >>%s<<", scanner.GetLine(), scanner.GetColumn(), scanner.GetStr() ) ;
-      return false ; // check RIGHT-PAREN
+      return NULL ;
     } // else
   } // if
-  else if ( scanner.GetType() == TYPE_QUOTE ) return SExp() ; // try to get SExp
+  else if ( scanner.PeakNextTokenType() == TYPE_QUOTE ) { // QUOTE <S-exp>
+    if ( scanner.AdvanceToNextToken() == false ) return NULL ; // advance to next token QUOTE
+    if ( headPtr->SetCurrentToken( scanner.GetCurrentToken() ) == false ) return NULL ; // put quote to top node
+    if ( headPtr->SetRightSubTree( SExp() ) == false ) return NULL ; // get <S-exp> and put it to right tree
+    return headPtr ; // success, return full tree
+  } // else if
   else { // get atom
-    if ( Atom() == true ) return true ;
+    if ( headPtr->SetCurrentToken( Atom() ) == true ) return headPtr ;
     else {
       printf("\nERROR (unexpected token) : atom or '(' expected when token at Line %d Column %d is >>%s<<", scanner.GetLine(), scanner.GetColumn(), scanner.GetStr() ) ;
-      return false ;
+      return NULL ;
     } // else
   } // else
-
-  printf( "\nunknown sexp" ) ;
-  return false ; // end pattern
 } // Parser::SExp()
 
-bool Parser::Atom() {
+TokenPtr Parser::Atom() {
   // <ATOM>  ::= SYMBOL | INT | FLOAT | STRING | NIL | T | LEFT-PAREN RIGHT-PAREN
+  if ( scanner.AdvanceToNextToken() == false ) return NULL ; // advance to next token atom
   switch ( scanner.GetType() ) {
-    case TYPE_SYMBOL : return true ;
-    case TYPE_INT : return true ;
-    case TYPE_FLOAT : return true ;
-    case TYPE_STRING : return true ;
-    case TYPE_NIL : return true ;
-    case TYPE_T : return true ;
-    default : return false ;
+    case TYPE_SYMBOL : return scanner.GetCurrentToken() ;
+    case TYPE_INT : return scanner.GetCurrentToken() ;
+    case TYPE_FLOAT : return scanner.GetCurrentToken() ;
+    case TYPE_STRING : return scanner.GetCurrentToken() ;
+    case TYPE_NIL : return scanner.GetCurrentToken() ;
+    case TYPE_T : return scanner.GetCurrentToken() ;
+    default : return NULL ;
   } // switch
 } // Parser::Atom()
 
 bool Parser::PrintSExp() {
   printf( "\nParser::PrintSExp()\n" ) ;
 } // Parser::PrintSExp()
+
+void Parser::ReadGarbage() {
+  while ( paren_balance > 0 ) {
+    scanner.AdvanceToNextToken() ;
+    if ( scanner.GetType() == TYPE_RIGHT_PAREN ) 
+      paren_balance-- ;
+    else if ( scanner.GetType() == TYPE_LEFT_PAREN )
+      paren_balance++ ;  
+  } // while
+} // Parser::ReadGarbage( )
 
 // main /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void Init() {
@@ -452,7 +505,6 @@ int main() {
       else
         parser.PrintSExp() ;
     } // if
-    else flag_quit = true ;
 
     if ( flag_quit == true )
       break ;
