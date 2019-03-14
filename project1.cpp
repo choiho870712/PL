@@ -163,45 +163,35 @@ class ParsingTree {
   } // GetCurrentToken()
 
   void PrintParsingTree( ParsingTree *tree ) {
-    ParsingTree *leftPtr = NULL ;
-    ParsingTree *rightPtr = NULL ;
-    TokenPtr tokenPtr = NULL ;
-    tokenPtr = tree->GetCurrentToken() ;
-    leftPtr = tree->GetLeftSubTree() ;
-    rightPtr = tree->GetRightSubTree() ;
+    ParsingTree *leftPtr = tree->GetLeftSubTree() ;
+    ParsingTree *rightPtr = tree->GetRightSubTree() ;
+    TokenPtr tokenPtr = tree->GetCurrentToken() ;
 
     if ( tokenPtr != NULL ) { // in leaves
       if ( m_isFromRightTree == true ) { // is the end of current level
         if ( tokenPtr->GetType() != TYPE_NIL ) { // if not nil
-          int space_count = m_currentLevel * 2 + 2 ;
-
-          for ( int i = 0 ; i < space_count ; i++ )
-            printf( " " ) ;
+          for ( int i = 0 ; i < m_currentLevel + 1 ; i++ )
+            printf( "  " ) ;
           printf( ".\n" ) ;
-          for ( int i = 0 ; i < space_count ; i++ )
-            printf( " " ) ;
+          for ( int i = 0 ; i < m_currentLevel + 1 ; i++ )
+            printf( "  " ) ;
           tokenPtr->PrintToken() ;
           printf( "\n" ) ;
         } // if
       } // if
       else {
         if ( m_currentLevel > m_printedLevel ) { // level change, print (
-          int levelDifference = m_currentLevel - m_printedLevel ;
-          int space_count = m_printedLevel * 2 ;
-          m_printedLevel = m_currentLevel ;
-
-          for ( int i = 0 ; i < space_count ; i++ )
-            printf( " " ) ;
-          for ( int i = 0 ; i < levelDifference ; i++ )
+          for ( int i = 0 ; i < m_printedLevel ; i++ )
+            printf( "  " ) ;
+          for ( int i = 0 ; i < m_currentLevel - m_printedLevel ; i++ )
             printf( "( " ) ;
           tokenPtr->PrintToken() ;
           printf( "\n" ) ;
+          m_printedLevel = m_currentLevel ;
         } // if
         else { // same level
-          int space_count = m_currentLevel * 2 ;
-
-          for ( int i = 0 ; i < space_count ; i++ )
-            printf( " " ) ;
+          for ( int i = 0 ; i < m_currentLevel ; i++ )
+            printf( "  " ) ;
           tokenPtr->PrintToken() ;
           printf( "\n" ) ;
         } // else
@@ -222,9 +212,8 @@ class ParsingTree {
 
     if ( rightPtr == NULL && m_printedLevel > m_currentLevel ) { // print )
       m_printedLevel-- ;
-      int space_count = m_printedLevel * 2 ;
-      for ( int i = 0 ; i < space_count ; i++ )
-        printf( " " ) ;
+      for ( int i = 0 ; i < m_printedLevel ; i++ )
+        printf( "  " ) ;
       printf( ")\n" ) ;
     } // if
   } // PrintParsingTree()
@@ -244,8 +233,9 @@ class Scanner {
   public :
   Scanner() {
     m_flag_multi_cmd_in_same_line = false ;
-    m_flag_got_token = false ;
     m_flag_get_first_token = false ;
+    m_pre_line = 1 ;
+    m_pre_column = 0 ;
     m_current_line = 1 ;
     m_current_column = 0 ;
     m_latest_token_line = 1 ;
@@ -258,14 +248,14 @@ class Scanner {
   bool m_flag_multi_cmd_in_same_line ;
 
   void Init() {
-    m_flag_got_token = false ;
     m_flag_get_first_token = false ;
+    m_pre_line = 1 ;
+    m_pre_column = 0 ;
     m_current_line = 1 ;
     m_current_column = 0 ;
     m_latest_token_line = 1 ;
     m_latest_token_column = 0 ;
     m_current_token = NULL ;
-    m_next_token = NULL ;
   } // Init()
 
   bool AdvanceToNextToken() {
@@ -274,15 +264,22 @@ class Scanner {
       m_next_token = NULL ;
     } // if
     else {
-      m_current_token = new Token ;
       CharPtr newToken ;
       newToken = ReadNewToken() ;
       if ( newToken == NULL ) return false ;
+      m_current_token = new Token ;
       m_current_token->SetStr( newToken ) ;
       m_current_token->SetType( CheckType( m_current_token->GetStr() ) ) ;
       m_current_token->SetLine( m_latest_token_line ) ;
       m_current_token->SetColumn( m_latest_token_column ) ;
     } // else
+
+    // m_current_token->PrintStr() ;
+    // printf( " " ) ;
+    // m_current_token->PrintLine() ;
+    // printf( " " ) ;
+    // m_current_token->PrintColumn() ;
+    // printf( "\n" ) ;
 
     m_flag_multi_cmd_in_same_line = false ;
     return true ;
@@ -291,13 +288,15 @@ class Scanner {
   TOKENTYPE PeakNextTokenType() {
     if ( m_next_token == NULL ) {
       m_next_token = new Token ;
+      m_next_token->SetType( TYPE_UNKNOWN ) ;
       CharPtr newToken ;
       newToken = ReadNewToken() ;
-      if ( newToken == NULL ) return TYPE_UNKNOWN ;
-      m_next_token->SetStr( newToken ) ;
-      m_next_token->SetType( CheckType( m_next_token->GetStr() ) ) ;
-      m_next_token->SetLine( m_latest_token_line ) ;
-      m_next_token->SetColumn( m_latest_token_column ) ;
+      if ( newToken != NULL ) {
+        m_next_token->SetStr( newToken ) ;
+        m_next_token->SetType( CheckType( m_next_token->GetStr() ) ) ;
+        m_next_token->SetLine( m_latest_token_line ) ;
+        m_next_token->SetColumn( m_latest_token_column ) ;
+      } // if
     } // if
 
     return m_next_token->GetType() ;
@@ -323,9 +322,16 @@ class Scanner {
     return m_current_token ;  
   } // GetCurrentToken()
 
+  void ClearThisLine() {
+    m_nextChar = '\0' ;
+    while ( getchar() != '\n' ) ;
+  } // ClearThisLine()
+
   private :
   bool m_flag_got_token ;
   bool m_flag_get_first_token ;
+  int m_pre_line ;
+  int m_pre_column ;
   int m_current_line ;
   int m_current_column ;
   int m_latest_token_column ;
@@ -335,7 +341,7 @@ class Scanner {
   char m_nextChar ; // store next char while there is a char doesn't be done yet, and it was gotten
 
   CharPtr ReadNewToken() {
-    m_flag_got_token = false ;
+    bool flag_get_token = false ;
     bool flag_break = false ;
     CharPtr str = ( CharPtr ) malloc( sizeof( char ) * MAX_STRING_LENGTH ) ;
     int top = 0 ;
@@ -344,13 +350,14 @@ class Scanner {
     // getting token
     while ( flag_break == false ) {
       if ( str[top] == EOF ) { // check EOF 
-        if ( m_flag_got_token == true ) m_nextChar = str[top] ;
+        if ( flag_get_token == true )
+          StoreChar( str[top] ) ;
         else g_flag_EOF = true ;
         flag_break = true ;
       } // if
       else if ( isspace( str[top] ) ) { // check white space
-        if ( m_flag_got_token == true ) {
-          m_nextChar = str[top] ;
+        if ( flag_get_token == true ) {
+          StoreChar( str[top] ) ;
           flag_break = true ;
         } // if
         else
@@ -358,7 +365,7 @@ class Scanner {
       } // else if
       else if ( Isseparator( str[top] ) ) { // check separator ( ) ' " ;
         flag_break = true ;
-        if ( m_flag_got_token == true ) m_nextChar = str[top] ;
+        if ( flag_get_token == true ) StoreChar( str[top] ) ;
         else {
           if ( str[top] == ';' ) { // comment
             flag_break = false ;
@@ -368,17 +375,9 @@ class Scanner {
           else {
             m_latest_token_line = m_current_line ;
             m_latest_token_column = m_current_column ;
-            m_flag_got_token = true ;
+            flag_get_token = true ;
 
-            if ( str[top] == '(' ) {
-              m_nextChar = GetNewChar() ;
-              if ( m_nextChar == ')' ) { // nil
-                top++ ;
-                str[top] = m_nextChar ;
-                m_nextChar = '\0' ;
-              } // if
-            } // if
-            else if ( str[top] == '"' ) { // string
+            if ( str[top] == '"' ) { // string
               for ( str[++top] = GetNewChar() ; str[top] != '"' ; str[++top] = GetNewChar() ) {
                 if ( str[top] == '\\' ) {
                   char ch = GetNewChar() ;
@@ -390,31 +389,30 @@ class Scanner {
                 } // if
                 else if ( str[top] == '\n' ) {
                   str[top] = '\0' ;
-                  int str_len = strlen( str ) ;
                   printf( "ERROR (no closing quote) : END-OF-LINE encountered at Line" ) ;
-                  printf( " %d Column %d\n", m_latest_token_line, m_latest_token_column + str_len ) ;
+                  printf( " %d Column %d\n", m_pre_line, m_pre_column ) ;
 
                   return NULL ;
                 } // else if
               } // for
-            } // else if
+            } // if
 
             top++ ;
           } // else
         } // else 
       } // else if
       else { // others
-        if ( m_flag_got_token == false ) {
+        if ( flag_get_token == false ) {
           m_latest_token_line = m_current_line ;
           m_latest_token_column = m_current_column ;
-          m_flag_got_token = true ;
+          flag_get_token = true ;
         } // if
 
         str[++top] = GetNewChar() ;
       } // else
     } // while
 
-    if ( m_flag_got_token == true ) 
+    if ( flag_get_token == true ) 
       m_flag_get_first_token = true ;
 
     // return success
@@ -478,18 +476,32 @@ class Scanner {
     else ch = getchar() ; // get first char
 
     if ( ch == '\n' ) {
+      m_pre_line = m_current_line ;
+      m_pre_column = m_current_column ;
       m_current_line++ ;
       m_current_column = 0 ;
     } // if
-    else m_current_column++ ;
+    else { 
+      m_pre_column = m_current_column ;
+      m_current_column++ ;
+    } // else
 
     if ( m_flag_get_first_token == false && m_flag_multi_cmd_in_same_line == true && ch == '\n' ) {
       m_flag_multi_cmd_in_same_line = false ;
       m_current_line = 1 ;
+      m_current_column = 0 ;
+      m_pre_line = 1 ;
+      m_pre_column = 0 ;
     } // if
 
     return ch ;
   } // GetNewChar()
+
+  void StoreChar( char ch ) {
+    m_nextChar = ch ;
+    m_current_line = m_pre_line ;
+    m_current_column = m_pre_column ;
+  } // StoreChar()
 } ; // class Scanner
 
 // class Parser /////////////////////////////////////////////////////////////////////////////////////////////
@@ -545,31 +557,39 @@ class Parser {
     // do syntax
     if ( m_scanner.PeakNextTokenType() == TYPE_LEFT_PAREN ) { // LEFT-PAREN 
       if ( m_scanner.AdvanceToNextToken() == false ) return NULL ; // get LEFT-PAREN
-      if ( headPtr->SetLeftSubTree( SExp() ) == false ) return NULL ; // get <S-exp> and put it to left tree
-
-      while ( ! ( m_scanner.PeakNextTokenType() == TYPE_DOT || 
-                  m_scanner.PeakNextTokenType() == TYPE_RIGHT_PAREN ) ) { // stop with DOT and QUOTE
-
-        accessPtr = new ParsingTree ; // creat new sub tree 
-        currentPtr->SetRightSubTree( accessPtr ) ; // add this tree to right tree
-        currentPtr = currentPtr->GetRightSubTree() ; // jump to that tree
-        if ( currentPtr->SetLeftSubTree( SExp() ) == false ) return NULL ; // put it to left tree
-      } // while
-
-      if ( m_scanner.PeakNextTokenType() == TYPE_DOT ) { // [ DOT <S-exp> ], 
-        if ( m_scanner.AdvanceToNextToken() == false ) return NULL ; // get DOT
-        if ( currentPtr->SetRightSubTree( SExp() ) == false ) return NULL ; // put it to right tree
+      if ( m_scanner.PeakNextTokenType() == TYPE_RIGHT_PAREN ) { // () nil
+        TokenPtr token = m_scanner.GetCurrentToken() ;
+        token->SetType( TYPE_NIL ) ;
+        if ( m_scanner.AdvanceToNextToken() == false ) return NULL ; // get RIGHT-PAREN
+        if ( headPtr->SetCurrentToken( token ) == true ) return headPtr ;
       } // if
+      else {
+        if ( headPtr->SetLeftSubTree( SExp() ) == false ) return NULL ; // get <S-exp> and put it to left tree
 
-      if ( m_scanner.AdvanceToNextToken() == false ) return NULL ; // get RIGHT-PAREN 
-      if ( m_scanner.GetType() == TYPE_RIGHT_PAREN ) { // RIGHT-PAREN 
-        return headPtr ; // success, return full tree
-      } // if
-      else { // no RIGHT-PAREN 
-        printf( "ERROR (unexpected token) : ')' expected when token at Line %d ", m_scanner.GetLine() ) ;
-        printf( "Column %d is >>%s<<\n", m_scanner.GetColumn(), m_scanner.GetStr() ) ;
-        while ( getchar() != '\n' ) ;
-        return NULL ;
+        while ( ! ( m_scanner.PeakNextTokenType() == TYPE_DOT || 
+                    m_scanner.PeakNextTokenType() == TYPE_RIGHT_PAREN ) ) { // stop with DOT and QUOTE
+          accessPtr = new ParsingTree ; // creat new sub tree 
+          currentPtr->SetRightSubTree( accessPtr ) ; // add this tree to right tree
+          currentPtr = currentPtr->GetRightSubTree() ; // jump to that tree
+          if ( currentPtr->SetLeftSubTree( SExp() ) == false ) return NULL ; // put it to left tree
+        } // while
+
+        if ( m_scanner.PeakNextTokenType() == TYPE_DOT ) { // [ DOT <S-exp> ], 
+          if ( m_scanner.AdvanceToNextToken() == false ) return NULL ; // get DOT
+          if ( currentPtr->SetRightSubTree( SExp() ) == false ) return NULL ; // put it to right tree
+        } // if
+
+        if ( m_scanner.AdvanceToNextToken() == false ) return NULL ; // get RIGHT-PAREN 
+        if ( m_scanner.GetType() == TYPE_RIGHT_PAREN ) { // RIGHT-PAREN 
+          return headPtr ; // success, return full tree
+        } // if
+        else { // no RIGHT-PAREN 
+          CharPtr str = m_scanner.GetStr() ;
+          printf( "ERROR (unexpected token) : ')' expected when token at Line %d ", m_scanner.GetLine() ) ;
+          printf( "Column %d is >>%c<<\n", m_scanner.GetColumn(), str[0] ) ;
+          m_scanner.ClearThisLine() ;
+          return NULL ;
+        } // else
       } // else
     } // if
     else if ( m_scanner.PeakNextTokenType() == TYPE_QUOTE ) { // QUOTE <S-exp>
@@ -585,13 +605,18 @@ class Parser {
       if ( m_scanner.AdvanceToNextToken() == false ) return NULL ; // advance to next token atom
       if ( headPtr->SetCurrentToken( Atom() ) == true ) return headPtr ;
       else {
+        CharPtr str = m_scanner.GetStr() ;
         printf( "ERROR (unexpected token) : atom or '(' expected when token at Line" ) ;
         printf( " %d Column", m_scanner.GetLine() ) ;
-        printf( " %d is >>%s<<\n", m_scanner.GetColumn(), m_scanner.GetStr() ) ;
-        while ( getchar() != '\n' ) ;
+        printf( " %d is >>%c<<\n", m_scanner.GetColumn(), str[0] ) ;
+        m_scanner.ClearThisLine() ;
         return NULL ;
       } // else
     } // else if
+    else {
+      if ( m_scanner.AdvanceToNextToken() == false ) return NULL ; // advance to next token
+      return NULL ;
+    } // else
 
     return NULL ;
   } // SExp()
@@ -614,8 +639,8 @@ void Init() {
 } // Init()
 
 int main() {
-  int test_num = 0 ;
-  scanf( "%d", &test_num ) ;
+  while ( getchar() != '\n' ) ; 
+
   bool flag_exit = false ;
   Parser parser ;
   Init() ;
